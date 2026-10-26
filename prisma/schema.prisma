@@ -1,0 +1,81 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Role {
+  roleid   Int    @id @default(autoincrement())
+  rolename String @unique @db.VarChar(50)
+  users    User[]
+}
+
+model Membership {
+  mid   Int    @id @default(autoincrement())
+  mname String @unique @db.VarChar(50)
+  score Int    @default(0)
+  users User[]
+
+  @@map("MemberShip")
+}
+
+model User {
+  uid        Int        @id @default(autoincrement())
+  username   String     @unique @db.VarChar(50)
+  fullname   String     @db.VarChar(100)
+  password   String     @db.VarChar(255)
+  roleid     Int
+  mid        Int
+  role       Role       @relation(fields: [roleid], references: [roleid], onDelete: Restrict)
+  membership Membership @relation(fields: [mid], references: [mid], onDelete: Restrict)
+  orders     Order[]
+
+  @@index([roleid])
+  @@index([mid])
+}
+
+model Product {
+  pid      Int           @id @default(autoincrement())
+  pname    String        @db.VarChar(100)
+  price    Decimal       @db.Decimal(10, 2)
+  quantity Int           @default(0)
+  details  OrderDetail[]
+}
+
+model Order {
+  oid       Int           @id @default(autoincrement())
+  uid       Int
+  createat  DateTime      @default(now()) @db.Timestamptz(3)
+  user      User          @relation(fields: [uid], references: [uid], onDelete: Restrict)
+  details   OrderDetail[]
+  shipments Shipment[]
+
+  @@index([uid, createat])
+}
+
+model OrderDetail {
+  oid        Int
+  pid        Int
+  qty        Int
+  unit_price Decimal @db.Decimal(10, 2)
+  order      Order   @relation(fields: [oid], references: [oid], onDelete: Restrict)
+  product    Product @relation(fields: [pid], references: [pid], onDelete: Restrict)
+
+  @@id([oid, pid])
+  @@index([pid])
+}
+
+model Shipment {
+  shipid Int    @id @default(autoincrement())
+  oid    Int
+  status String @default("PENDING") @db.VarChar(50)
+  order  Order  @relation(fields: [oid], references: [oid], onDelete: Restrict)
+
+  @@index([oid])
+}

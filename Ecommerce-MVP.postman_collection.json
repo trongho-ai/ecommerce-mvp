@@ -1,0 +1,569 @@
+{
+  "info": {
+    "name": "E-commerce MVP - 8 tieu chi",
+    "description": "Bộ request luyện tiêu chí 6 và 7. Mở Docker Desktop, chạy Docker Compose và seed trước.\n\nTheo phiếu chấm: đăng ký phải trả data.role.rolename = normal và data.membership.score = 10. score thuộc bảng MemberShip trong sơ đồ.\n\nTẠO SẢN PHẨM BẰNG CLI Ở TIÊU CHÍ 5: INSERT INTO \"Product\" (pname, price, quantity) VALUES ('X', 100000.00, 20), ('Y', 200000.00, 30) RETURNING pid, pname, price, quantity;\n\nSau đó mở Variables của collection, điền pidX và pidY bằng ID thật. Không giả định ID là 1 và 2.\n\nDùng biến Collection trong bộ này; tránh tạo biến Environment trùng tên. Gửi lần lượt các request theo số thứ tự.\n\nRequest đăng ký luôn tạo username hocvien_<thời gian> mới, lưu lại cho request đăng nhập; không cần tự điền username.\n\nRequest tạo đơn CÓ token làm thay đổi tồn kho. Chỉ gửi một lần cho mỗi lượt trình diễn. Nếu luyện lại, tạo cặp X/Y mới bằng CLI rồi cập nhật pidX/pidY để đối chiếu tồn ban đầu 20/30.\n\nBộ request không tự xóa dữ liệu vì cần giữ đơn, chi tiết và shipment cho tiêu chí 8. Không có request tạo sản phẩm bằng API.\n\nToken nằm trong response đăng nhập để trình diễn theo phiếu và được lưu trong biến token. Không xuất collection kèm token thật lên GitHub hoặc gửi token qua chat.\n\nTài liệu Postman: https://learning.postman.com/docs/tests-and-scripts/write-scripts/test-scripts/",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string",
+      "description": "Địa chỉ API; không thêm dấu / ở cuối."
+    },
+    {
+      "key": "username",
+      "value": "",
+      "type": "string",
+      "description": "Được tạo mới tự động mỗi lần gửi request đăng ký."
+    },
+    {
+      "key": "password",
+      "value": "MatKhauThiThu123!",
+      "type": "string",
+      "description": "Mật khẩu tài khoản thực hành, không phải mật khẩu admin."
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu sau đăng nhập; không gửi token vào chat hoặc GitHub."
+    },
+    {
+      "key": "pidX",
+      "value": "",
+      "type": "string",
+      "description": "Nhập pid thật do INSERT sản phẩm X bằng CLI trả về."
+    },
+    {
+      "key": "pidY",
+      "value": "",
+      "type": "string",
+      "description": "Nhập pid thật do INSERT sản phẩm Y bằng CLI trả về."
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu khi tạo đơn thành công; dùng cho SQL kiểm tra mục 8."
+    },
+    {
+      "key": "shipmentId",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu từ shipment PENDING được tạo cùng đơn."
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string",
+      "description": "Tự lưu khi đăng ký thành công."
+    }
+  ],
+  "item": [
+    {
+      "name": "Tieu chi 6 - Dang ky, dang nhap va xem tai khoan",
+      "description": "Thực hiện lần lượt 01 → 02 → 03. Cả đăng ký và đăng nhập dùng No Auth. Tài khoản mới phải có role normal và membership.score 10.",
+      "item": [
+        {
+          "name": "01 - Dang ky tai khoan moi",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"fullname\": \"Hoc vien thuc hanh\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/auth/register",
+            "description": "Body → raw → JSON. Mỗi lần Send tự sinh username mới và xóa token/orderId cũ để không dùng nhầm tài khoản. Kỳ vọng HTTP 201, role normal, score 10, không có password/hash trong response."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const freshUsername = 'hocvien_' + Date.now() + '_' + Math.floor(Math.random() * 10000);",
+                  "pm.collectionVariables.set('username', freshUsername);",
+                  "pm.variables.set('username', freshUsername);",
+                  "const practicePassword = String(pm.collectionVariables.get('password') || '');",
+                  "if (practicePassword.length < 12) throw new Error('Set the collection password to at least 12 characters.');",
+                  "pm.variables.set('password', practicePassword);",
+                  "['token', 'orderId', 'shipmentId', 'userId'].forEach(function (key) {",
+                  "  pm.collectionVariables.set(key, '');",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 - Tao tai khoan thanh cong', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.test('Tu dong gan role normal', function () { pm.expect(data.role.rolename).to.equal('normal'); });",
+                  "  pm.test('Tu dong gan membership score 10', function () { pm.expect(data.membership.score).to.equal(10); });",
+                  "  pm.test('Khong tra ve mat khau hoac hash', function () { pm.expect(data).to.not.have.property('password'); });",
+                  "  pm.test('Username dung tai khoan vua tao', function () { pm.expect(data.username).to.equal(pm.collectionVariables.get('username')); });",
+                  "  if (Number.isInteger(data.uid)) pm.collectionVariables.set('userId', String(data.uid));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02 - Dang nhap va luu token",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Body → raw → JSON. Đọc data.accessToken trong response. Script lưu token cho các request Bearer tiếp theo; không in token ra Console."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const savedUsername = pm.collectionVariables.get('username');",
+                  "if (!savedUsername) throw new Error('Run the Register request successfully before Login.');",
+                  "pm.variables.set('username', savedUsername);",
+                  "pm.variables.set('password', pm.collectionVariables.get('password'));",
+                  "pm.collectionVariables.set('token', '');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - Dang nhap thanh cong', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.test('Co access token va loai Bearer', function () {",
+                  "    pm.expect(data.accessToken).to.be.a('string').that.is.not.empty;",
+                  "    pm.expect(data.accessToken.split('.')).to.have.lengthOf(3);",
+                  "    pm.expect(data.tokenType).to.equal('Bearer');",
+                  "    pm.expect(data.expiresIn).to.be.a('number').above(0);",
+                  "  });",
+                  "  pm.test('Tai khoan dung role normal va score 10', function () {",
+                  "    pm.expect(data.user.role.rolename).to.equal('normal');",
+                  "    pm.expect(data.user.membership.score).to.equal(10);",
+                  "    pm.expect(data.user.uid).to.equal(Number(pm.collectionVariables.get('userId')));",
+                  "    pm.expect(data.user).to.not.have.property('password');",
+                  "  });",
+                  "  if (typeof data.accessToken === 'string' && data.accessToken) pm.collectionVariables.set('token', data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03 - Xem tai khoan bang Bearer token",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/users/me",
+            "description": "Authorization → Bearer Token: {{token}}. Kỳ vọng HTTP 200 và tài khoản normal, score 10."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const savedToken = pm.collectionVariables.get('token');",
+                  "if (!savedToken) throw new Error('Run the Login request successfully before this request.');",
+                  "pm.variables.set('token', savedToken);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - Token truy cap duoc tai khoan', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.test('Dung tai khoan, role normal va score 10', function () {",
+                  "    pm.expect(data.uid).to.equal(Number(pm.collectionVariables.get('userId')));",
+                  "    pm.expect(data.role.rolename).to.equal('normal');",
+                  "    pm.expect(data.membership.score).to.equal(10);",
+                  "    pm.expect(data).to.not.have.property('password');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tieu chi 7 - Dat X mua 2, Y mua 5 va xem shipment",
+      "description": "Điền pidX/pidY sau khi tạo X giá 100000 tồn20, Y giá200000 tồn30 bằng CLI. Chạy 04 để chứng minh thiếu token bị401; 05 đặt thật một lần; 06/07 xem đơn. Sau đó kiểm tra PostgreSQL ở tiêu chí8.",
+      "item": [
+        {
+          "name": "04 - Dat hang KHONG token phai bao loi",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    { \"pid\": {{pidX}}, \"qty\": 2 },\n    { \"pid\": {{pidY}}, \"qty\": 5 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Authorization đặt No Auth rõ ràng. Không thêm header Authorization. Body vẫn hợp lệ với đúng pidX/pidY. Kỳ vọng 401, không tạo đơn hoặc trừ tồn."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "['pidX', 'pidY'].forEach(function (key) {",
+                  "  const value = String(pm.collectionVariables.get(key) || '');",
+                  "  if (!/^[1-9]\\d*$/.test(value) || Number(value) > 2147483647) {",
+                  "    throw new Error('Set collection variable ' + key + ' to the real product ID returned by the CLI INSERT.');",
+                  "  }",
+                  "  pm.variables.set(key, value);",
+                  "});",
+                  "if (String(pm.collectionVariables.get('pidX')) === String(pm.collectionVariables.get('pidY'))) {",
+                  "  throw new Error('pidX and pidY must be different product IDs.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401 - Khong token bi tu choi', function () { pm.response.to.have.status(401); });",
+                  "if (pm.response.code === 401) {",
+                  "  pm.test('Response co thong tin loi', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.an('object');",
+                  "    pm.expect(body.error.code).to.equal('UNAUTHENTICATED');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "05 - Dat hang CO token X2 Y5",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    { \"pid\": {{pidX}}, \"qty\": 2 },\n    { \"pid\": {{pidY}}, \"qty\": 5 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Authorization → Bearer Token {{token}}. Gửi đúng một lần để X từ20 còn18, Y từ30 còn25. Kỳ vọng201. Backend tự lấy giá, uid và thời gian hiện tại; tự tạo shipment PENDING. Lấy data.oid làm orderId cho SQL."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "['pidX', 'pidY'].forEach(function (key) {",
+                  "  const value = String(pm.collectionVariables.get(key) || '');",
+                  "  if (!/^[1-9]\\d*$/.test(value) || Number(value) > 2147483647) {",
+                  "    throw new Error('Set collection variable ' + key + ' to the real product ID returned by the CLI INSERT.');",
+                  "  }",
+                  "  pm.variables.set(key, value);",
+                  "});",
+                  "if (String(pm.collectionVariables.get('pidX')) === String(pm.collectionVariables.get('pidY'))) {",
+                  "  throw new Error('pidX and pidY must be different product IDs.');",
+                  "}",
+                  "",
+                  "const savedToken = pm.collectionVariables.get('token');",
+                  "if (!savedToken) throw new Error('Run the Login request successfully before this request.');",
+                  "pm.variables.set('token', savedToken);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 - Tao don thanh cong', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) {",
+                  "",
+                  "const data = pm.response.json().data;",
+                  "const xId = Number(pm.collectionVariables.get('pidX'));",
+                  "const yId = Number(pm.collectionVariables.get('pidY'));",
+                  "pm.test('Don co dung hai dong hang X va Y', function () {",
+                  "  pm.expect(data.details).to.be.an('array').with.lengthOf(2);",
+                  "  const x = data.details.find(function (line) { return line.pid === xId; });",
+                  "  const y = data.details.find(function (line) { return line.pid === yId; });",
+                  "  pm.expect(x, 'Dong san pham X').to.exist;",
+                  "  pm.expect(y, 'Dong san pham Y').to.exist;",
+                  "  pm.expect(x.qty).to.equal(2);",
+                  "  pm.expect(y.qty).to.equal(5);",
+                  "  pm.expect(x.unit_price).to.equal('100000.00');",
+                  "  pm.expect(y.unit_price).to.equal('200000.00');",
+                  "});",
+                  "pm.test('Tong tien dung 1.200.000 theo gia X/Y da nhap CLI', function () {",
+                  "  pm.expect(data.total).to.equal('1200000.00');",
+                  "});",
+                  "pm.test('Co shipment PENDING gan dung don hang', function () {",
+                  "  pm.expect(data.shipments).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(data.shipments[0].oid).to.equal(data.oid);",
+                  "  pm.expect(data.shipments[0].status).to.equal('PENDING');",
+                  "});",
+                  "pm.test('Don thuoc tai khoan vua dang ky', function () {",
+                  "  pm.expect(data.uid).to.equal(Number(pm.collectionVariables.get('userId')));",
+                  "});",
+                  "",
+                  "  pm.test('Thoi gian tao don gan thoi diem hien tai', function () {",
+                  "    const createdAt = Date.parse(data.createat);",
+                  "    pm.expect(Number.isFinite(createdAt)).to.equal(true);",
+                  "    pm.expect(Math.abs(Date.now() - createdAt)).to.be.below(120000);",
+                  "  });",
+                  "  if (Number.isInteger(data.oid)) pm.collectionVariables.set('orderId', String(data.oid));",
+                  "  if (Array.isArray(data.shipments) && data.shipments[0] && Number.isInteger(data.shipments[0].shipid)) {",
+                  "    pm.collectionVariables.set('shipmentId', String(data.shipments[0].shipid));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "06 - Xem don, detail va shipment",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{orderId}}",
+            "description": "Kỳ vọng200. Xem data.details và data.shipments ngay trong response. Không cần endpoint shipment riêng để hiển thị thông tin giao hàng. Giữ orderId cho bước kiểm tra SQL."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const savedToken = pm.collectionVariables.get('token');",
+                  "if (!savedToken) throw new Error('Run the Login request successfully before this request.');",
+                  "pm.variables.set('token', savedToken);",
+                  "",
+                  "const savedOrderId = String(pm.collectionVariables.get('orderId') || '');",
+                  "if (!/^[1-9]\\d*$/.test(savedOrderId)) throw new Error('Create an order successfully before reading it.');",
+                  "pm.variables.set('orderId', savedOrderId);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - Doc lai don thanh cong', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "",
+                  "const data = pm.response.json().data;",
+                  "const xId = Number(pm.collectionVariables.get('pidX'));",
+                  "const yId = Number(pm.collectionVariables.get('pidY'));",
+                  "pm.test('Don co dung hai dong hang X va Y', function () {",
+                  "  pm.expect(data.details).to.be.an('array').with.lengthOf(2);",
+                  "  const x = data.details.find(function (line) { return line.pid === xId; });",
+                  "  const y = data.details.find(function (line) { return line.pid === yId; });",
+                  "  pm.expect(x, 'Dong san pham X').to.exist;",
+                  "  pm.expect(y, 'Dong san pham Y').to.exist;",
+                  "  pm.expect(x.qty).to.equal(2);",
+                  "  pm.expect(y.qty).to.equal(5);",
+                  "  pm.expect(x.unit_price).to.equal('100000.00');",
+                  "  pm.expect(y.unit_price).to.equal('200000.00');",
+                  "});",
+                  "pm.test('Tong tien dung 1.200.000 theo gia X/Y da nhap CLI', function () {",
+                  "  pm.expect(data.total).to.equal('1200000.00');",
+                  "});",
+                  "pm.test('Co shipment PENDING gan dung don hang', function () {",
+                  "  pm.expect(data.shipments).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(data.shipments[0].oid).to.equal(data.oid);",
+                  "  pm.expect(data.shipments[0].status).to.equal('PENDING');",
+                  "});",
+                  "pm.test('Don thuoc tai khoan vua dang ky', function () {",
+                  "  pm.expect(data.uid).to.equal(Number(pm.collectionVariables.get('userId')));",
+                  "});",
+                  "",
+                  "  pm.test('Dung don va shipment da luu', function () {",
+                  "    pm.expect(data.oid).to.equal(Number(pm.collectionVariables.get('orderId')));",
+                  "    pm.expect(data.shipments[0].shipid).to.equal(Number(pm.collectionVariables.get('shipmentId')));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "07 - Xem danh sach don cua minh",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": "{{baseUrl}}/orders?page=1&limit=20",
+            "description": "Kỳ vọng200; data là mảng, pagination mô tả phân trang. Với tài khoản mới chỉ đặt một lần, danh sách phải có orderId vừa tạo."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const savedToken = pm.collectionVariables.get('token');",
+                  "if (!savedToken) throw new Error('Run the Login request successfully before this request.');",
+                  "pm.variables.set('token', savedToken);",
+                  "",
+                  "const savedOrderId = String(pm.collectionVariables.get('orderId') || '');",
+                  "if (!/^[1-9]\\d*$/.test(savedOrderId)) throw new Error('Create an order successfully before reading it.');",
+                  "pm.variables.set('orderId', savedOrderId);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - Doc danh sach don thanh cong', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Danh sach co don vua tao va chi thuoc tai khoan nay', function () {",
+                  "    pm.expect(body.data).to.be.an('array');",
+                  "    const orderId = Number(pm.collectionVariables.get('orderId'));",
+                  "    const userId = Number(pm.collectionVariables.get('userId'));",
+                  "    pm.expect(body.data.some(function (order) { return order.oid === orderId; })).to.equal(true);",
+                  "    body.data.forEach(function (order) { pm.expect(order.uid).to.equal(userId); });",
+                  "    pm.expect(body.pagination).to.be.an('object');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

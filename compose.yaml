@@ -1,0 +1,72 @@
+name: ecommerce-mvp
+
+x-app: &app
+  build: .
+  image: ecommerce-mvp:local
+  environment: &app-env
+    NODE_ENV: production
+    PORT: 3000
+    DATABASE_URL: postgresql://${POSTGRES_USER:?Run setup:env}:${POSTGRES_PASSWORD:?Run setup:env}@db:5432/${POSTGRES_DB:?Run setup:env}?schema=public
+    JWT_SECRET: ${JWT_SECRET:?Run setup:env}
+    JWT_TTL_SECONDS: ${JWT_TTL_SECONDS:-900}
+    JWT_ISSUER: ${JWT_ISSUER:-ecommerce-mvp}
+    JWT_AUDIENCE: ${JWT_AUDIENCE:-ecommerce-clients}
+    AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-20}
+
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Run setup:env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup:env}
+      POSTGRES_DB: ${POSTGRES_DB:?Run setup:env}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["npm", "run", "db:migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:${PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  seed:
+    <<: *app
+    profiles: ["tools"]
+    environment:
+      <<: *app-env
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?Run setup:env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Run setup:env}
+    command: ["npm", "run", "db:seed"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      disable: true
+    restart: "no"
+
+volumes:
+  pgdata:
